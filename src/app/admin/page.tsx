@@ -10,7 +10,28 @@ interface Category {
   radius: number;
   enabled: boolean;
   excludeTerms: string[];
+  kleinanzeigenSection: string;
+  searchType: string;
+  offerType: string;
 }
+
+const SECTIONS: Record<string, string> = {
+  'alle': 'Alle Kategorien',
+  'dienstleistungen': 'Dienstleistungen',
+  'haus-garten': 'Haus & Garten',
+  'elektronik': 'Elektronik',
+  'auto-rad-boot': 'Auto, Rad & Boot',
+  'immobilien': 'Immobilien',
+  'jobs': 'Jobs',
+  'familie-kind-baby': 'Familie, Kind & Baby',
+  'freizeit-nachbarschaft': 'Freizeit & Nachbarschaft',
+  'heimwerken': 'Heimwerken',
+  'musik-film-buecher': 'Musik, Film & Bücher',
+  'mode-beauty': 'Mode & Beauty',
+  'haustiere': 'Haustiere',
+  'unterricht-kurse': 'Unterricht & Kurse',
+  'verschenken': 'Zu Verschenken',
+};
 
 export default function AdminPanel() {
   const [password, setPassword] = useState('');
@@ -26,6 +47,9 @@ export default function AdminPanel() {
   const [newLocation, setNewLocation] = useState('46286');
   const [newRadius, setNewRadius] = useState(50);
   const [newExclude, setNewExclude] = useState('Praktikant, Verstärkung, Festanstellung');
+  const [newSection, setNewSection] = useState('dienstleistungen');
+  const [newSearchType, setNewSearchType] = useState('anbieter:privat');
+  const [newOfferType, setNewOfferType] = useState('anzeige:gesuche');
 
   // Edit form
   const [editKeywords, setEditKeywords] = useState('');
@@ -33,6 +57,9 @@ export default function AdminPanel() {
   const [editRadius, setEditRadius] = useState(50);
   const [editExclude, setEditExclude] = useState('');
   const [editEnabled, setEditEnabled] = useState(true);
+  const [editSection, setEditSection] = useState('alle');
+  const [editSearchType, setEditSearchType] = useState('');
+  const [editOfferType, setEditOfferType] = useState('');
 
   const authHeaders = useCallback(() => ({
     'Authorization': `Bearer ${password}`,
@@ -81,6 +108,9 @@ export default function AdminPanel() {
         location: newLocation,
         radius: newRadius,
         excludeTerms: newExclude.split(',').map((t) => t.trim()).filter(Boolean),
+        kleinanzeigenSection: newSection,
+        searchType: newSearchType,
+        offerType: newOfferType,
       }),
     });
 
@@ -102,6 +132,9 @@ export default function AdminPanel() {
     setEditRadius(cat.radius);
     setEditExclude(cat.excludeTerms.join(', '));
     setEditEnabled(cat.enabled);
+    setEditSection(cat.kleinanzeigenSection || 'alle');
+    setEditSearchType(cat.searchType || '');
+    setEditOfferType(cat.offerType || '');
   };
 
   const handleUpdate = async (id: string) => {
@@ -114,6 +147,9 @@ export default function AdminPanel() {
         radius: editRadius,
         excludeTerms: editExclude.split(',').map((t) => t.trim()).filter(Boolean),
         enabled: editEnabled,
+        kleinanzeigenSection: editSection,
+        searchType: editSearchType,
+        offerType: editOfferType,
       }),
     });
 
@@ -150,6 +186,43 @@ export default function AdminPanel() {
     });
     fetchCategories();
   };
+
+  // Reusable select for Kleinanzeigen section
+  const SectionSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-[#86bc25]"
+    >
+      {Object.entries(SECTIONS).map(([key, label]) => (
+        <option key={key} value={key}>{label}</option>
+      ))}
+    </select>
+  );
+
+  const SearchTypeSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-[#86bc25]"
+    >
+      <option value="">Alle Anbieter</option>
+      <option value="anbieter:privat">Nur Privat</option>
+      <option value="anbieter:gewerblich">Nur Gewerblich</option>
+    </select>
+  );
+
+  const OfferTypeSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-[#86bc25]"
+    >
+      <option value="">Alle Anzeigen</option>
+      <option value="anzeige:angebote">Nur Angebote</option>
+      <option value="anzeige:gesuche">Nur Gesuche</option>
+    </select>
+  );
 
   // Login screen
   if (!authenticated) {
@@ -188,7 +261,7 @@ export default function AdminPanel() {
             <p className="text-sm opacity-90">Add, edit, or remove search categories</p>
           </div>
           <a href="/" className="text-sm bg-white/20 px-4 py-2 rounded-lg hover:bg-white/30 transition-colors">
-            ← Back to Browser
+            &larr; Back to Browser
           </a>
         </div>
       </header>
@@ -198,7 +271,7 @@ export default function AdminPanel() {
         {message && (
           <div className="bg-green-50 text-green-700 px-4 py-2 rounded-lg text-sm mb-6 flex items-center justify-between">
             <span>{message}</span>
-            <button onClick={() => setMessage('')} className="text-green-500 hover:text-green-700">✕</button>
+            <button onClick={() => setMessage('')} className="text-green-500 hover:text-green-700">&times;</button>
           </div>
         )}
 
@@ -218,6 +291,12 @@ export default function AdminPanel() {
                   required
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Kleinanzeigen Section</label>
+                <SectionSelect value={newSection} onChange={setNewSection} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Location &amp; Radius</label>
                 <div className="flex gap-2">
@@ -241,6 +320,14 @@ export default function AdminPanel() {
                   </select>
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Advertiser Type</label>
+                <SearchTypeSelect value={newSearchType} onChange={setNewSearchType} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Listing Type</label>
+                <OfferTypeSelect value={newOfferType} onChange={setNewOfferType} />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">
@@ -257,13 +344,13 @@ export default function AdminPanel() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">
-                Exclude Terms <span className="text-gray-400 font-normal">(comma-separated)</span>
+                Exclude Terms <span className="text-gray-400 font-normal">(comma-separated — ads containing these words are hidden)</span>
               </label>
               <input
                 type="text"
                 value={newExclude}
                 onChange={(e) => setNewExclude(e.target.value)}
-                placeholder="Praktikant, Verstärkung, Festanstellung"
+                placeholder="Praktikant, Verstärkung, Festanstellung, BMW, Audi, VW"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#86bc25]"
               />
             </div>
@@ -322,37 +409,48 @@ export default function AdminPanel() {
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Location</label>
-                      <input
-                        type="text"
-                        value={editLocation}
-                        onChange={(e) => setEditLocation(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                      />
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Kleinanzeigen Section</label>
+                      <SectionSelect value={editSection} onChange={setEditSection} />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Radius</label>
-                      <select
-                        value={editRadius}
-                        onChange={(e) => setEditRadius(Number(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
-                      >
-                        <option value={10}>10 km</option>
-                        <option value={25}>25 km</option>
-                        <option value={50}>50 km</option>
-                        <option value={100}>100 km</option>
-                        <option value={200}>200 km</option>
-                      </select>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Location &amp; Radius</label>
+                      <div className="flex gap-1">
+                        <input
+                          type="text"
+                          value={editLocation}
+                          onChange={(e) => setEditLocation(e.target.value)}
+                          className="flex-1 min-w-0 px-2 py-2 border border-gray-200 rounded-lg text-sm"
+                        />
+                        <select
+                          value={editRadius}
+                          onChange={(e) => setEditRadius(Number(e.target.value))}
+                          className="px-1 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                        >
+                          <option value={10}>10km</option>
+                          <option value={25}>25km</option>
+                          <option value={50}>50km</option>
+                          <option value={100}>100km</option>
+                          <option value={200}>200km</option>
+                        </select>
+                      </div>
                     </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Exclude Terms</label>
-                      <input
-                        type="text"
-                        value={editExclude}
-                        onChange={(e) => setEditExclude(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                      />
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Advertiser</label>
+                      <SearchTypeSelect value={editSearchType} onChange={setEditSearchType} />
                     </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Listing Type</label>
+                      <OfferTypeSelect value={editOfferType} onChange={setEditOfferType} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Exclude Terms</label>
+                    <input
+                      type="text"
+                      value={editExclude}
+                      onChange={(e) => setEditExclude(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                    />
                   </div>
                   <label className="flex items-center gap-2 text-sm text-gray-600">
                     <input
@@ -368,7 +466,7 @@ export default function AdminPanel() {
                 /* View Mode */
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <h3 className="font-semibold text-gray-800">{cat.name}</h3>
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full ${
@@ -378,6 +476,9 @@ export default function AdminPanel() {
                         }`}
                       >
                         {cat.enabled ? 'Active' : 'Disabled'}
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
+                        {SECTIONS[cat.kleinanzeigenSection] || 'Alle Kategorien'}
                       </span>
                     </div>
                     <div className="flex gap-2">
@@ -410,9 +511,23 @@ export default function AdminPanel() {
                       <span className="text-gray-400">Keywords: </span>
                       <span className="text-gray-700">{cat.keywords.join(', ')}</span>
                     </div>
-                    <div>
-                      <span className="text-gray-400">Location: </span>
-                      <span className="text-gray-700">{cat.location} ({cat.radius} km)</span>
+                    <div className="flex flex-wrap gap-x-6 gap-y-1">
+                      <div>
+                        <span className="text-gray-400">Location: </span>
+                        <span className="text-gray-700">{cat.location} ({cat.radius} km)</span>
+                      </div>
+                      {cat.searchType && (
+                        <div>
+                          <span className="text-gray-400">Advertiser: </span>
+                          <span className="text-gray-700">{cat.searchType === 'anbieter:privat' ? 'Privat' : 'Gewerblich'}</span>
+                        </div>
+                      )}
+                      {cat.offerType && (
+                        <div>
+                          <span className="text-gray-400">Type: </span>
+                          <span className="text-gray-700">{cat.offerType === 'anzeige:gesuche' ? 'Gesuche' : 'Angebote'}</span>
+                        </div>
+                      )}
                     </div>
                     {cat.excludeTerms.length > 0 && (
                       <div>

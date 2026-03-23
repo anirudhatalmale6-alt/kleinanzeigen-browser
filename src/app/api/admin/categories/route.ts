@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, keywords, location, radius, excludeTerms } = body;
+    const { name, keywords, location, radius, excludeTerms, kleinanzeigenSection, searchType, offerType } = body;
 
     if (!name || !keywords || !Array.isArray(keywords) || keywords.length === 0) {
       return NextResponse.json(
@@ -65,6 +65,9 @@ export async function POST(req: NextRequest) {
       radius: radius || 50,
       enabled: true,
       excludeTerms: excludeTerms || ['Praktikant', 'Verstärkung', 'Festanstellung'],
+      kleinanzeigenSection: kleinanzeigenSection || 'alle',
+      searchType: searchType || '',
+      offerType: offerType || '',
     };
 
     addCategory(newCat);

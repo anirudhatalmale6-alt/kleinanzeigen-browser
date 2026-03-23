@@ -5,7 +5,7 @@
  */
 
 import * as cheerio from 'cheerio';
-import { Category } from './categories';
+import { Category, KLEINANZEIGEN_SECTIONS } from './categories';
 
 export interface Ad {
   title: string;
@@ -22,12 +22,47 @@ const cache: Record<string, { ads: Ad[]; timestamp: number }> = {};
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Build a Kleinanzeigen search URL for a given keyword + location + radius.
+ * Build a Kleinanzeigen search URL with section, filters, and location.
+ *
+ * Verified URL patterns from the site:
+ *   /s-dienstleistungen/46286/anbieter:privat/anzeige:gesuche/klimaanlage/k0c297l1758r50
+ *   /s-46286/anbieter:privat/anzeige:gesuche/photovoltaik/k0l1758r100
  */
-function buildSearchUrl(keyword: string, location: string, radius: number): string {
+function buildSearchUrl(
+  keyword: string,
+  location: string,
+  radius: number,
+  section: string,
+  searchType: string,
+  offerType: string
+): string {
   const encoded = encodeURIComponent(keyword);
-  // Using the general search with location filter
-  return `https://www.kleinanzeigen.de/s-preis:/${location}/anbieter:privat/${encoded}/k0l1758r${radius}`;
+  const sectionInfo = KLEINANZEIGEN_SECTIONS[section] || { slug: '', code: '' };
+
+  const parts: string[] = ['https://www.kleinanzeigen.de'];
+
+  // Section slug (e.g. "s-dienstleistungen") or just "s" for all
+  if (sectionInfo.slug) {
+    parts.push(sectionInfo.slug);
+  } else {
+    parts.push('s');
+  }
+
+  // Location (postal code)
+  parts.push(location);
+
+  // Filters
+  if (searchType) parts.push(searchType);
+  if (offerType) parts.push(offerType);
+
+  // Search keyword
+  parts.push(encoded);
+
+  // Suffix: k0 = all subcategories, cXXX = category code, l1758 = PLZ location type, rXX = radius
+  const categoryCode = sectionInfo.code || '';
+  parts.push(`k0${categoryCode}l1758r${radius}`);
+
+  return parts.join('/');
 }
 
 /**
@@ -94,9 +129,12 @@ async function fetchKeyword(
   keyword: string,
   location: string,
   radius: number,
-  categoryName: string
+  categoryName: string,
+  section: string,
+  searchType: string,
+  offerType: string
 ): Promise<Ad[]> {
-  const url = buildSearchUrl(keyword, location, radius);
+  const url = buildSearchUrl(keyword, location, radius, section, searchType, offerType);
 
   try {
     const response = await fetch(url, {
@@ -135,7 +173,15 @@ export async function scrapeCategory(category: Category): Promise<Ad[]> {
 
   // Fetch all keywords in parallel
   const promises = category.keywords.map((kw) =>
-    fetchKeyword(kw, category.location, category.radius, category.name)
+    fetchKeyword(
+      kw,
+      category.location,
+      category.radius,
+      category.name,
+      category.kleinanzeigenSection || 'alle',
+      category.searchType || '',
+      category.offerType || ''
+    )
   );
   const results = await Promise.all(promises);
   let allAds = results.flat();
