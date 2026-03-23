@@ -14,6 +14,8 @@ export interface Ad {
   imageUrl: string;
   description: string;
   date: string;
+  location: string;   // e.g. "44359 Mengede"
+  distance: string;    // e.g. "(33 km)"
   category: string;
   adSection: string;  // Kleinanzeigen section extracted from the ad's link/category
 }
@@ -106,8 +108,18 @@ function parseAds($: cheerio.CheerioAPI, categoryName: string): Ad[] {
     const descEl = $el.find('.aditem-main--middle--description');
     const description = descEl.text().trim() || '';
 
-    const dateEl = $el.find('.aditem-main--top--right, .aditem-main--top .icon-calendar-open + span');
+    const dateEl = $el.find('.aditem-main--top--right');
     const date = dateEl.text().trim() || '';
+
+    // Extract location (postcode + city) from the ad
+    const locationEl = $el.find('.aditem-main--top--left');
+    const locationText = locationEl.text().trim();
+    // Location text looks like: "44359 Mengede (33 km)" or "44359 Mengede"
+    const locationMatch = locationText.match(/(\d{5}\s+[^\(]+)/);
+    const location = locationMatch ? locationMatch[1].trim() : '';
+    // Extract distance like "(33 km)"
+    const distanceMatch = locationText.match(/\((\d+)\s*km\)/);
+    const distance = distanceMatch ? `${distanceMatch[1]} km` : '';
 
     // Extract the Kleinanzeigen category/section from the ad's link URL
     // Links look like: /s-anzeige/dienstleistungen/... or /s-anzeige/autos/...
@@ -125,6 +137,8 @@ function parseAds($: cheerio.CheerioAPI, categoryName: string): Ad[] {
       imageUrl,
       description,
       date,
+      location,
+      distance,
       category: categoryName,
       adSection,
     });
@@ -203,6 +217,15 @@ export async function scrapeCategory(category: Category): Promise<Ad[]> {
     if (seen.has(ad.link)) return false;
     seen.add(ad.link);
     return true;
+  });
+
+  // Filter out ads beyond the configured radius
+  // When Kleinanzeigen has no local results, it silently returns ads from all of Germany
+  allAds = allAds.filter((ad) => {
+    if (!ad.distance) return true; // Keep ads without distance info (likely local)
+    const km = parseInt(ad.distance, 10);
+    if (isNaN(km)) return true;
+    return km <= category.radius;
   });
 
   // Filter out excluded Kleinanzeigen sections (e.g. "auto-rad-boot")
