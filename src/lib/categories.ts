@@ -50,7 +50,6 @@ export const defaultCategories: Category[] = [
       'Split Klimaanlage',
       'Klimaanlage Montage',
       'Klimaanlage Installation',
-      'Wärmepumpe',
     ],
     location: '46286',
     radius: 50,
