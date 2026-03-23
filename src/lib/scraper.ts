@@ -206,22 +206,40 @@ export async function scrapeCategory(category: Category): Promise<Ad[]> {
   });
 
   // Filter out excluded Kleinanzeigen sections (e.g. "auto-rad-boot")
+  // Ad URLs follow the pattern: /s-anzeige/title-slug/ID-CATEGORYCODE-LOCATIONCODE
+  // e.g. /s-anzeige/golf-5-1-9-tdi/3361082851-216-1103 (216 = Auto category)
   if (category.excludeSections && category.excludeSections.length > 0) {
-    // Map section keys to URL path segments used in ad links
-    const sectionToUrlPaths: Record<string, string[]> = {
-      'auto-rad-boot': ['autos', 'auto', 'motorrad', 'boot'],
-      'immobilien': ['immobilien'],
-      'jobs': ['jobs'],
-      'haustiere': ['haustiere'],
+    // Map section keys to Kleinanzeigen numeric category codes found in ad URLs
+    const sectionToCategoryCodes: Record<string, string[]> = {
+      'auto-rad-boot':     ['216', '210', '223', '211', '222', '224'],  // Autos, Motorräder, Boote, Wohnmobile, Fahrräder, Auto-Teile
+      'immobilien':        ['195', '196', '197', '198', '199'],
+      'jobs':              ['102', '103', '104', '105', '106', '107'],
+      'haustiere':         ['130', '131', '132', '133', '134'],
+      'familie-kind-baby': ['17', '18', '19', '20', '21', '22'],
+      'elektronik':        ['161', '162', '163', '164', '165', '166', '167', '168'],
+      'mode-beauty':       ['153', '154', '155', '156', '157'],
+      'musik-film-buecher':['73', '74', '75', '76', '77'],
+      'heimwerken':        ['88', '89', '90', '91'],
+      'freizeit-nachbarschaft': ['185', '186', '187', '188'],
+      'dienstleistungen':  ['297', '298', '299', '300', '301'],
+      'haus-garten':       ['80', '81', '82', '83', '84', '85', '86', '87'],
+      'unterricht-kurse':  ['33', '34', '35'],
+      'verschenken':       ['272'],
     };
-    const excludedPaths = category.excludeSections.flatMap(
-      (s) => sectionToUrlPaths[s] || [s]
+    const excludedCodes = category.excludeSections.flatMap(
+      (s) => sectionToCategoryCodes[s] || []
     );
-    allAds = allAds.filter((ad) => {
-      // Check if the ad link contains any excluded section path
-      const linkLower = ad.link.toLowerCase();
-      return !excludedPaths.some((path) => linkLower.includes(`/${path}/`));
-    });
+    if (excludedCodes.length > 0) {
+      allAds = allAds.filter((ad) => {
+        // Extract category code from URL: /s-anzeige/slug/ID-CATCODE-LOCCODE
+        const match = ad.link.match(/\/(\d+)-(\d+)-(\d+)$/);
+        if (match) {
+          const catCode = match[2];
+          return !excludedCodes.includes(catCode);
+        }
+        return true; // Keep ads we can't parse
+      });
+    }
   }
 
   // Apply exclude terms
