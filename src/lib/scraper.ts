@@ -15,6 +15,7 @@ export interface Ad {
   description: string;
   date: string;
   category: string;
+  adSection: string;  // Kleinanzeigen section extracted from the ad's link/category
 }
 
 // Simple in-memory cache: { key: { ads, timestamp } }
@@ -108,6 +109,15 @@ function parseAds($: cheerio.CheerioAPI, categoryName: string): Ad[] {
     const dateEl = $el.find('.aditem-main--top--right, .aditem-main--top .icon-calendar-open + span');
     const date = dateEl.text().trim() || '';
 
+    // Extract the Kleinanzeigen category/section from the ad's link URL
+    // Links look like: /s-anzeige/dienstleistungen/... or /s-anzeige/autos/...
+    const adSection = linkHref.split('/').find((part: string) =>
+      ['autos', 'dienstleistungen', 'haus-garten', 'elektronik', 'immobilien',
+       'jobs', 'familie-kind-baby', 'freizeit-nachbarschaft', 'heimwerken',
+       'musik-film-buecher', 'mode-beauty', 'haustiere', 'unterricht-kurse',
+       'zu-verschenken'].includes(part)
+    ) || '';
+
     ads.push({
       title,
       price,
@@ -116,6 +126,7 @@ function parseAds($: cheerio.CheerioAPI, categoryName: string): Ad[] {
       description,
       date,
       category: categoryName,
+      adSection,
     });
   });
 
@@ -193,6 +204,25 @@ export async function scrapeCategory(category: Category): Promise<Ad[]> {
     seen.add(ad.link);
     return true;
   });
+
+  // Filter out excluded Kleinanzeigen sections (e.g. "auto-rad-boot")
+  if (category.excludeSections && category.excludeSections.length > 0) {
+    // Map section keys to URL path segments used in ad links
+    const sectionToUrlPaths: Record<string, string[]> = {
+      'auto-rad-boot': ['autos', 'auto', 'motorrad', 'boot'],
+      'immobilien': ['immobilien'],
+      'jobs': ['jobs'],
+      'haustiere': ['haustiere'],
+    };
+    const excludedPaths = category.excludeSections.flatMap(
+      (s) => sectionToUrlPaths[s] || [s]
+    );
+    allAds = allAds.filter((ad) => {
+      // Check if the ad link contains any excluded section path
+      const linkLower = ad.link.toLowerCase();
+      return !excludedPaths.some((path) => linkLower.includes(`/${path}/`));
+    });
+  }
 
   // Apply exclude terms
   if (category.excludeTerms.length > 0) {

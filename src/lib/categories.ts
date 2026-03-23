@@ -37,6 +37,7 @@ export interface Category {
   enabled: boolean;
   excludeTerms: string[];
   kleinanzeigenSection: string;  // Key from KLEINANZEIGEN_SECTIONS (e.g. 'dienstleistungen')
+  excludeSections: string[];     // Kleinanzeigen sections to exclude (e.g. ['auto-rad-boot'])
   searchType: string;       // 'anbieter:privat', 'anbieter:gewerblich', or '' (all)
   offerType: string;        // 'anzeige:angebote', 'anzeige:gesuche', or '' (all)
 }
@@ -56,8 +57,9 @@ export const defaultCategories: Category[] = [
     location: '46286',
     radius: 50,
     enabled: true,
-    excludeTerms: ['Praktikant', 'Verstärkung', 'Festanstellung', 'BMW', 'Audi', 'VW', 'Mercedes', 'Opel', 'Ford', 'Seat', 'Skoda', 'Peugeot', 'Renault', 'Fiat', 'Toyota', 'Hyundai', 'Kia', 'Mazda', 'Suzuki', 'Dacia', 'Volvo', 'Citroën', 'Citroen', 'Nissan', 'Honda'],
-    kleinanzeigenSection: 'dienstleistungen',  // Only search in Services
+    excludeTerms: ['Praktikant', 'Verstärkung', 'Festanstellung'],
+    kleinanzeigenSection: 'alle',
+    excludeSections: ['auto-rad-boot'],  // Exclude car listings
     searchType: 'anbieter:privat',
     offerType: 'anzeige:gesuche',
   },
@@ -76,7 +78,8 @@ export const defaultCategories: Category[] = [
     radius: 100,
     enabled: true,
     excludeTerms: ['Praktikant', 'Verstärkung', 'Festanstellung'],
-    kleinanzeigenSection: 'alle',  // Search all categories
+    kleinanzeigenSection: 'alle',
+    excludeSections: ['auto-rad-boot'],  // Exclude car listings
     searchType: 'anbieter:privat',
     offerType: 'anzeige:gesuche',
   },

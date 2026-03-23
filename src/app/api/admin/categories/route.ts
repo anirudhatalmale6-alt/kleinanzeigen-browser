@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, keywords, location, radius, excludeTerms, kleinanzeigenSection, searchType, offerType } = body;
+    const { name, keywords, location, radius, excludeTerms, kleinanzeigenSection, excludeSections, searchType, offerType } = body;
 
     if (!name || !keywords || !Array.isArray(keywords) || keywords.length === 0) {
       return NextResponse.json(
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
       enabled: true,
       excludeTerms: excludeTerms || ['Praktikant', 'Verstärkung', 'Festanstellung'],
       kleinanzeigenSection: kleinanzeigenSection || 'alle',
+      excludeSections: excludeSections || ['auto-rad-boot'],
       searchType: searchType || '',
       offerType: offerType || '',
     };

@@ -11,6 +11,7 @@ interface Category {
   enabled: boolean;
   excludeTerms: string[];
   kleinanzeigenSection: string;
+  excludeSections: string[];
   searchType: string;
   offerType: string;
 }
@@ -47,7 +48,8 @@ export default function AdminPanel() {
   const [newLocation, setNewLocation] = useState('46286');
   const [newRadius, setNewRadius] = useState(50);
   const [newExclude, setNewExclude] = useState('Praktikant, Verstärkung, Festanstellung');
-  const [newSection, setNewSection] = useState('dienstleistungen');
+  const [newSection, setNewSection] = useState('alle');
+  const [newExcludeSections, setNewExcludeSections] = useState<string[]>(['auto-rad-boot']);
   const [newSearchType, setNewSearchType] = useState('anbieter:privat');
   const [newOfferType, setNewOfferType] = useState('anzeige:gesuche');
 
@@ -58,6 +60,7 @@ export default function AdminPanel() {
   const [editExclude, setEditExclude] = useState('');
   const [editEnabled, setEditEnabled] = useState(true);
   const [editSection, setEditSection] = useState('alle');
+  const [editExcludeSections, setEditExcludeSections] = useState<string[]>([]);
   const [editSearchType, setEditSearchType] = useState('');
   const [editOfferType, setEditOfferType] = useState('');
 
@@ -109,6 +112,7 @@ export default function AdminPanel() {
         radius: newRadius,
         excludeTerms: newExclude.split(',').map((t) => t.trim()).filter(Boolean),
         kleinanzeigenSection: newSection,
+        excludeSections: newExcludeSections,
         searchType: newSearchType,
         offerType: newOfferType,
       }),
@@ -133,6 +137,7 @@ export default function AdminPanel() {
     setEditExclude(cat.excludeTerms.join(', '));
     setEditEnabled(cat.enabled);
     setEditSection(cat.kleinanzeigenSection || 'alle');
+    setEditExcludeSections(cat.excludeSections || []);
     setEditSearchType(cat.searchType || '');
     setEditOfferType(cat.offerType || '');
   };
@@ -148,6 +153,7 @@ export default function AdminPanel() {
         excludeTerms: editExclude.split(',').map((t) => t.trim()).filter(Boolean),
         enabled: editEnabled,
         kleinanzeigenSection: editSection,
+        excludeSections: editExcludeSections,
         searchType: editSearchType,
         offerType: editOfferType,
       }),
@@ -350,9 +356,32 @@ export default function AdminPanel() {
                 type="text"
                 value={newExclude}
                 onChange={(e) => setNewExclude(e.target.value)}
-                placeholder="Praktikant, Verstärkung, Festanstellung, BMW, Audi, VW"
+                placeholder="Praktikant, Verstärkung, Festanstellung"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#86bc25]"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-2">
+                Exclude Sections <span className="text-gray-400 font-normal">(ads from these Kleinanzeigen categories will be hidden)</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(SECTIONS).filter(([key]) => key !== 'alle').map(([key, label]) => (
+                  <label key={key} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border cursor-pointer transition-colors ${
+                    newExcludeSections.includes(key) ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-600'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={newExcludeSections.includes(key)}
+                      onChange={(e) => {
+                        if (e.target.checked) setNewExcludeSections([...newExcludeSections, key]);
+                        else setNewExcludeSections(newExcludeSections.filter(s => s !== key));
+                      }}
+                      className="w-3 h-3 accent-red-500"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
             </div>
             <button
               type="submit"
@@ -452,6 +481,27 @@ export default function AdminPanel() {
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-2">Exclude Sections</label>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(SECTIONS).filter(([key]) => key !== 'alle').map(([key, label]) => (
+                        <label key={key} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border cursor-pointer transition-colors ${
+                          editExcludeSections.includes(key) ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-500'
+                        }`}>
+                          <input
+                            type="checkbox"
+                            checked={editExcludeSections.includes(key)}
+                            onChange={(e) => {
+                              if (e.target.checked) setEditExcludeSections([...editExcludeSections, key]);
+                              else setEditExcludeSections(editExcludeSections.filter(s => s !== key));
+                            }}
+                            className="w-3 h-3 accent-red-500"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <label className="flex items-center gap-2 text-sm text-gray-600">
                     <input
                       type="checkbox"
@@ -529,9 +579,15 @@ export default function AdminPanel() {
                         </div>
                       )}
                     </div>
+                    {cat.excludeSections && cat.excludeSections.length > 0 && (
+                      <div>
+                        <span className="text-gray-400">Excluded Sections: </span>
+                        <span className="text-red-600">{cat.excludeSections.map(s => SECTIONS[s] || s).join(', ')}</span>
+                      </div>
+                    )}
                     {cat.excludeTerms.length > 0 && (
                       <div>
-                        <span className="text-gray-400">Exclude: </span>
+                        <span className="text-gray-400">Exclude Terms: </span>
                         <span className="text-gray-700">{cat.excludeTerms.join(', ')}</span>
                       </div>
                     )}
