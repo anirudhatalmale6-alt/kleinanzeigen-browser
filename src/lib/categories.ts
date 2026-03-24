@@ -1,40 +1,13 @@
 /**
- * Category configuration with persistent storage via Upstash Redis REST API.
- * Vercel KV was deprecated and migrated to Upstash Redis.
- * Derives REST API URL/token from REDIS_URL env var.
+ * Category configuration with persistent storage via Redis (ioredis).
+ * Vercel KV was deprecated → migrated to Redis Cloud.
+ * Uses REDIS_URL env var for direct TCP connection.
  * Falls back to in-memory storage if Redis is not configured.
  */
 
-const KV_KEY = 'kleinanzeigen:categories';
+import Redis from 'ioredis';
 
-/**
- * Extract Upstash REST API credentials from available env vars.
- * Priority: explicit REST vars > derive from REDIS_URL
- */
-function getRedisCredentials(): { url: string; token: string } | null {
-  // Check explicit REST API vars first
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-    return { url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN };
-  }
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    return { url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN };
-  }
-  // Derive from REDIS_URL: redis://default:PASSWORD@HOSTNAME:PORT
-  // Upstash REST API = https://HOSTNAME, token = PASSWORD
-  if (process.env.REDIS_URL) {
-    try {
-      const parsed = new URL(process.env.REDIS_URL);
-      const hostname = parsed.hostname;
-      const password = parsed.password;
-      if (hostname && password) {
-        return { url: `https://${hostname}`, token: password };
-      }
-    } catch {
-      console.error('Failed to parse REDIS_URL');
-    }
-  }
-  return null;
-}
+const KV_KEY = 'kleinanzeigen:categories';
 
 // Each section has a URL slug and a category code for the search suffix
 export const KLEINANZEIGEN_SECTIONS: Record<string, { slug: string; code: string }> = {
@@ -111,56 +84,59 @@ export const defaultCategories: Category[] = [
   },
 ];
 
-// Upstash Redis REST API helpers
-async function kvGet(): Promise<Category[] | null> {
-  const creds = getRedisCredentials();
-  if (!creds) return null;
+/**
+ * Create a short-lived Redis connection, run a command, disconnect.
+ * Works reliably on serverless (no stale connections).
+ */
+async function withRedis<T>(fn: (redis: Redis) => Promise<T>): Promise<T | null> {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) return null;
 
-  const resp = await fetch(`${creds.url}/get/${KV_KEY}`, {
-    headers: { Authorization: `Bearer ${creds.token}` },
-    cache: 'no-store',
+  const redis = new Redis(redisUrl, {
+    connectTimeout: 5000,
+    commandTimeout: 5000,
+    maxRetriesPerRequest: 1,
+    lazyConnect: true,
   });
-  if (!resp.ok) {
-    console.error('Redis GET failed:', resp.status, await resp.text());
+
+  try {
+    await redis.connect();
+    const result = await fn(redis);
+    return result;
+  } catch (err) {
+    console.error('Redis error:', err);
     return null;
+  } finally {
+    try { redis.disconnect(); } catch { /* ignore */ }
   }
-  const data = await resp.json();
-  if (data.result === null || data.result === undefined) return null;
-  if (typeof data.result === 'string') {
+}
+
+// Redis helpers
+async function kvGet(): Promise<Category[] | null> {
+  return withRedis(async (redis) => {
+    const raw = await redis.get(KV_KEY);
+    if (!raw) return null;
     try {
-      return JSON.parse(data.result);
+      return JSON.parse(raw) as Category[];
     } catch {
       return null;
     }
-  }
-  return data.result as Category[];
+  });
 }
 
 async function kvSet(categories: Category[]): Promise<boolean> {
-  const creds = getRedisCredentials();
-  if (!creds) return false;
-
-  const resp = await fetch(`${creds.url}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${creds.token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(['SET', KV_KEY, JSON.stringify(categories)]),
-    cache: 'no-store',
+  const result = await withRedis(async (redis) => {
+    await redis.set(KV_KEY, JSON.stringify(categories));
+    return true;
   });
-  if (!resp.ok) {
-    console.error('Redis SET failed:', resp.status, await resp.text());
-    return false;
-  }
-  return true;
+  return result === true;
 }
 
-// In-memory fallback (used when KV is not configured)
+// In-memory fallback
 let memoryCategories: Category[] = [...defaultCategories];
 
 /**
- * Get all categories from persistent storage (KV) or memory fallback.
+ * Get all categories from Redis or memory fallback.
  */
 export async function getCategories(): Promise<Category[]> {
   try {
@@ -169,14 +145,14 @@ export async function getCategories(): Promise<Category[]> {
       memoryCategories = stored;
       return stored;
     }
-    if (stored === null && getRedisCredentials()) {
-      // KV is available but key doesn't exist yet — save defaults
+    if (stored === null && process.env.REDIS_URL) {
+      // Redis available but key doesn't exist — save defaults
       await kvSet(defaultCategories);
       memoryCategories = [...defaultCategories];
       return defaultCategories;
     }
   } catch (err) {
-    console.error('KV error, using memory fallback:', err);
+    console.error('Redis error, using memory fallback:', err);
   }
   return memoryCategories;
 }
