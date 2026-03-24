@@ -92,17 +92,22 @@ let memoryCategories: Category[] = [...defaultCategories];
 
 /**
  * Get all categories from persistent storage (KV) or memory fallback.
+ * When KV succeeds, memory is updated so other instances stay in sync.
  */
 export async function getCategories(): Promise<Category[]> {
   if (isKvAvailable()) {
     try {
       const stored = await kv.get<Category[]>(KV_KEY);
-      if (stored && stored.length > 0) return stored;
+      if (stored && stored.length > 0) {
+        memoryCategories = stored; // Keep memory in sync with KV
+        return stored;
+      }
       // First run: save defaults to KV
       await kv.set(KV_KEY, defaultCategories);
+      memoryCategories = [...defaultCategories];
       return defaultCategories;
-    } catch {
-      // KV error - fall back to memory
+    } catch (err) {
+      console.error('KV read error, using memory fallback:', err);
     }
   }
   return memoryCategories;
