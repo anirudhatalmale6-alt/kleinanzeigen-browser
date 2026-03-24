@@ -1,9 +1,8 @@
 /**
- * Category configuration with persistent storage via Vercel KV.
+ * Category configuration with persistent storage via Vercel KV REST API.
+ * Uses raw fetch() instead of @vercel/kv package to avoid silent failures.
  * Falls back to in-memory storage if KV is not configured.
  */
-
-import { kv } from '@vercel/kv';
 
 const KV_KEY = 'kleinanzeigen:categories';
 
@@ -82,9 +81,53 @@ export const defaultCategories: Category[] = [
   },
 ];
 
-// Check if Vercel KV is configured
-function isKvAvailable(): boolean {
-  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+// Raw KV REST API helpers
+async function kvGet(): Promise<Category[] | null> {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return null;
+
+  const resp = await fetch(`${url}/get/${KV_KEY}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  if (!resp.ok) {
+    console.error('KV GET failed:', resp.status, await resp.text());
+    return null;
+  }
+  const data = await resp.json();
+  // Vercel KV REST API returns { result: <value> }
+  if (data.result === null || data.result === undefined) return null;
+  // The result may be a JSON string or already parsed
+  if (typeof data.result === 'string') {
+    try {
+      return JSON.parse(data.result);
+    } catch {
+      return null;
+    }
+  }
+  return data.result as Category[];
+}
+
+async function kvSet(categories: Category[]): Promise<boolean> {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return false;
+
+  const resp = await fetch(`${url}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(['SET', KV_KEY, JSON.stringify(categories)]),
+    cache: 'no-store',
+  });
+  if (!resp.ok) {
+    console.error('KV SET failed:', resp.status, await resp.text());
+    return false;
+  }
+  return true;
 }
 
 // In-memory fallback (used when KV is not configured)
@@ -92,23 +135,22 @@ let memoryCategories: Category[] = [...defaultCategories];
 
 /**
  * Get all categories from persistent storage (KV) or memory fallback.
- * When KV succeeds, memory is updated so other instances stay in sync.
  */
 export async function getCategories(): Promise<Category[]> {
-  if (isKvAvailable()) {
-    try {
-      const stored = await kv.get<Category[]>(KV_KEY);
-      if (stored && stored.length > 0) {
-        memoryCategories = stored; // Keep memory in sync with KV
-        return stored;
-      }
-      // First run: save defaults to KV
-      await kv.set(KV_KEY, defaultCategories);
+  try {
+    const stored = await kvGet();
+    if (stored && Array.isArray(stored) && stored.length > 0) {
+      memoryCategories = stored;
+      return stored;
+    }
+    if (stored === null && process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+      // KV is available but key doesn't exist yet — save defaults
+      await kvSet(defaultCategories);
       memoryCategories = [...defaultCategories];
       return defaultCategories;
-    } catch (err) {
-      console.error('KV read error, using memory fallback:', err);
     }
+  } catch (err) {
+    console.error('KV error, using memory fallback:', err);
   }
   return memoryCategories;
 }
@@ -133,11 +175,7 @@ export async function getCategoryById(id: string): Promise<Category | undefined>
  * Replace all categories.
  */
 export async function setCategories(updated: Category[]): Promise<void> {
-  if (isKvAvailable()) {
-    try {
-      await kv.set(KV_KEY, updated);
-    } catch { /* fall through to memory */ }
-  }
+  await kvSet(updated);
   memoryCategories = updated;
 }
 
